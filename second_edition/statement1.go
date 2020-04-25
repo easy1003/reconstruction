@@ -100,11 +100,7 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 	}
 
 	// main process
-
 	result = fmt.Sprintf("Statement for %v \n", invoice.Customer)
-	format := func(value float64) string {
-		return fmt.Sprintf("$%v", fmt.Sprintf("%.2f", value))
-	}
 
 	for _, perf := range invoice.Performances {
 		thisAmount, err := amountFor(perf)
@@ -114,11 +110,11 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 		volumeCredits += volumeCreditsFor(perf)
 
 		// print line for this order
-		result += fmt.Sprintf("  %s: %s (%v seats) \n", playFor(perf).Name, format(float64(thisAmount)/100), perf.Audience)
+		result += fmt.Sprintf("  %s: %s (%v seats) \n", playFor(perf).Name, usd(thisAmount), perf.Audience)
 		totalAmout += thisAmount
 	}
 
-	result += fmt.Sprintf("Amount owed is %v \n", format(float64(totalAmout)/100))
+	result += fmt.Sprintf("Amount owed is %v \n", usd(totalAmout))
 	result += fmt.Sprintf("You earned %v credits\n", volumeCredits)
 
 	return result, nil
@@ -129,6 +125,10 @@ func findMax(a int64, b int64) int64 {
 		return a
 	}
 	return b
+}
+
+func usd(value int64) string {
+	return fmt.Sprintf("$%v", fmt.Sprintf("%.2f", float64(value)/100))
 }
 
 func main() {
