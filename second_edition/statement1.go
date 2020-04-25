@@ -60,8 +60,33 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 		totalAmout    int64
 		volumeCredits int64
 	)
+
+	// inner func playFor
 	playFor := func(aPerformance *Performance) *Play {
 		return plays[aPerformance.PlayID]
+	}
+
+	// inner func amountFor
+	amountFor := func(aPerformance *Performance) (int64, error) {
+		result := int64(0)
+		switch playFor(aPerformance).Type {
+		case "tragedy":
+			result = 40000
+			if aPerformance.Audience > 30 {
+				result += 1000 * (aPerformance.Audience - 30)
+			}
+			break
+		case "comedy":
+			result = 30000
+			if aPerformance.Audience > 20 {
+				result += 10000 + 500*(aPerformance.Audience-20)
+			}
+			result += 300 * aPerformance.Audience
+			break
+		default:
+			return 0, fmt.Errorf("unknown type, type: %v", playFor(aPerformance).Type)
+		}
+		return result, nil
 	}
 
 	result = fmt.Sprintf("Statement for %v \n", invoice.Customer)
@@ -70,20 +95,19 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 	}
 
 	for _, perf := range invoice.Performances {
-		play := playFor(perf)
-		thisAmount ,err := amountFor(perf, play)
+		thisAmount, err := amountFor(perf)
 		if err != nil {
 			return "", err
 		}
 		// add volume credits
 		volumeCredits += findMax(perf.Audience-30, 0)
 		// add extra credit for every ten comedy attendees
-		if play.Type == "comedy" {
+		if playFor(perf).Type == "comedy" {
 			volumeCredits += int64(math.Floor(float64(perf.Audience) / 5))
 		}
 
 		// print line for this order
-		result += fmt.Sprintf("  %s: %s (%v seats) \n", play.Name, format(float64(thisAmount)/100), perf.Audience)
+		result += fmt.Sprintf("  %s: %s (%v seats) \n", playFor(perf).Name, format(float64(thisAmount)/100), perf.Audience)
 		totalAmout += thisAmount
 	}
 
@@ -92,29 +116,6 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 
 	return result, nil
 }
-
-func amountFor(perf *Performance, play *Play) (int64, error)  {
-	result := int64(0)
-	switch play.Type {
-	case "tragedy":
-		result = 40000
-		if perf.Audience > 30 {
-			result += 1000 * (perf.Audience - 30)
-		}
-		break
-	case "comedy":
-		result = 30000
-		if perf.Audience > 20 {
-			result += 10000 + 500*(perf.Audience-20)
-		}
-		result += 300 * perf.Audience
-		break
-	default:
-		return 0, fmt.Errorf("unknown type, type: %v", play.Type)
-	}
-	return result, nil
-}
-
 
 func findMax(a int64, b int64) int64 {
 	if a > b {
