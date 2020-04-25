@@ -54,7 +54,11 @@ func ReadPlays(data []byte) (map[string]*Play, error) {
 	return result, nil
 }
 
-func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
+func Statement(invoice *Invoice, plays map[string]*Play) (string, error) {
+	return RenderPlainText(invoice, plays)
+}
+
+func RenderPlainText(invoice *Invoice, plays map[string]*Play) (string, error) {
 	var (
 		result      string
 		totalAmount int64
@@ -182,7 +186,7 @@ func main() {
 	time.Sleep(2 * time.Second)
 
 	invoice := (*invoices)[0]
-	statement, err := Statement1(invoice, plays)
+	statement, err := Statement(invoice, plays)
 	if err != nil {
 		log.WithError(err).Errorf("statement find err")
 		return
