@@ -56,8 +56,8 @@ func ReadPlays(data []byte) (map[string]*Play, error) {
 
 func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 	var (
-		result     string
-		totalAmout int64
+		result      string
+		totalAmount int64
 	)
 
 	// inner func playFor
@@ -98,6 +98,15 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 		return result
 	}
 
+	// inner func totalVolumeCredits
+	totalVolumeCredits := func() int64 {
+		result := int64(0)
+		for _, perf := range invoice.Performances {
+			result += volumeCreditsFor(perf)
+		}
+		return result
+	}
+
 	// main process
 	result = fmt.Sprintf("Statement for %v \n", invoice.Customer)
 	for _, perf := range invoice.Performances {
@@ -107,16 +116,11 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 		}
 		// print line for this order
 		result += fmt.Sprintf("  %s: %s (%v seats) \n", playFor(perf).Name, usd(thisAmount), perf.Audience)
-		totalAmout += thisAmount
+		totalAmount += thisAmount
 	}
 
-	volumeCredits := int64(0)
-	for _, perf := range invoice.Performances {
-		volumeCredits += volumeCreditsFor(perf)
-	}
-
-	result += fmt.Sprintf("Amount owed is %v \n", usd(totalAmout))
-	result += fmt.Sprintf("You earned %v credits\n", volumeCredits)
+	result += fmt.Sprintf("Amount owed is %v \n", usd(totalAmount))
+	result += fmt.Sprintf("You earned %v credits\n", totalVolumeCredits())
 
 	return result, nil
 }
