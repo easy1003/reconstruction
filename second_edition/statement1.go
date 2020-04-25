@@ -60,13 +60,17 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 		totalAmout    int64
 		volumeCredits int64
 	)
+	playFor := func(aPerformance *Performance) *Play {
+		return plays[aPerformance.PlayID]
+	}
+
 	result = fmt.Sprintf("Statement for %v \n", invoice.Customer)
 	format := func(value float64) string {
 		return fmt.Sprintf("$%v", fmt.Sprintf("%.2f", value))
 	}
 
 	for _, perf := range invoice.Performances {
-		play := plays[perf.PlayID]
+		play := playFor(perf)
 		thisAmount ,err := amountFor(perf, play)
 		if err != nil {
 			return "", err
