@@ -89,6 +89,18 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 		return result, nil
 	}
 
+	// inner func volumeCreditsFor
+	volumeCreditsFor := func(aPerformance *Performance) int64 {
+		result := int64(0)
+		result += findMax(aPerformance.Audience-30, 0)
+		if playFor(aPerformance).Type == "comedy" {
+			result += int64(math.Floor(float64(aPerformance.Audience) / 5))
+		}
+		return result
+	}
+
+	// main process
+
 	result = fmt.Sprintf("Statement for %v \n", invoice.Customer)
 	format := func(value float64) string {
 		return fmt.Sprintf("$%v", fmt.Sprintf("%.2f", value))
@@ -99,12 +111,7 @@ func Statement1(invoice *Invoice, plays map[string]*Play) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		// add volume credits
-		volumeCredits += findMax(perf.Audience-30, 0)
-		// add extra credit for every ten comedy attendees
-		if playFor(perf).Type == "comedy" {
-			volumeCredits += int64(math.Floor(float64(perf.Audience) / 5))
-		}
+		volumeCredits += volumeCreditsFor(perf)
 
 		// print line for this order
 		result += fmt.Sprintf("  %s: %s (%v seats) \n", playFor(perf).Name, format(float64(thisAmount)/100), perf.Audience)
