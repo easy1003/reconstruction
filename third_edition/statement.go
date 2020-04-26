@@ -54,11 +54,19 @@ func ReadPlays(data []byte) (map[string]*Play, error) {
 	return result, nil
 }
 
-func Statement(invoice *Invoice, plays map[string]*Play) (string, error) {
-	return RenderPlainText(invoice, plays)
+type statementData struct {
+	Customer     string
+	Performances Performances
 }
 
-func RenderPlainText(invoice *Invoice, plays map[string]*Play) (string, error) {
+func Statement(invoice *Invoice, plays map[string]*Play) (string, error) {
+	statementData := new(statementData)
+	statementData.Customer = invoice.Customer
+	statementData.Performances = invoice.Performances
+	return RenderPlainText(statementData, plays)
+}
+
+func RenderPlainText(data *statementData, plays map[string]*Play) (string, error) {
 	var (
 		result      string
 		totalAmount int64
@@ -105,15 +113,15 @@ func RenderPlainText(invoice *Invoice, plays map[string]*Play) (string, error) {
 	// inner func totalVolumeCredits
 	totalVolumeCredits := func() int64 {
 		result := int64(0)
-		for _, perf := range invoice.Performances {
+		for _, perf := range data.Performances {
 			result += volumeCreditsFor(perf)
 		}
 		return result
 	}
 
 	// main process
-	result = fmt.Sprintf("Statement for %v \n", invoice.Customer)
-	for _, perf := range invoice.Performances {
+	result = fmt.Sprintf("Statement for %v \n", data.Customer)
+	for _, perf := range data.Performances {
 		thisAmount, err := amountFor(perf)
 		if err != nil {
 			return "", err
