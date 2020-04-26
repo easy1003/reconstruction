@@ -69,15 +69,6 @@ type statementData struct {
 	TotalVolumeCredits int64
 }
 
-func Statement(invoice *Invoice, plays map[string]*Play) (string, error) {
-	statementData := new(statementData)
-	statementData.Customer = invoice.Customer
-	statementData.Performances = enrichPerformance(invoice.Performances, plays)
-	statementData.TotalAmount = totalAmount(statementData)
-	statementData.TotalVolumeCredits = totalVolumeCredits(statementData)
-	return RenderPlainText(statementData)
-}
-
 func enrichPerformance(performances Performances, plays map[string]*Play) []*NewPerformance {
 	result := make([]*NewPerformance, 0, len(performances))
 	for _, perf := range performances {
@@ -149,6 +140,30 @@ func totalVolumeCredits(data *statementData) int64 {
 	return result
 }
 
+func findMax(a int64, b int64) int64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func usd(value int64) string {
+	return fmt.Sprintf("$%v", fmt.Sprintf("%.2f", float64(value)/100))
+}
+
+func CreateStatementData(invoice *Invoice, plays map[string]*Play) *statementData {
+	statementData := new(statementData)
+	statementData.Customer = invoice.Customer
+	statementData.Performances = enrichPerformance(invoice.Performances, plays)
+	statementData.TotalAmount = totalAmount(statementData)
+	statementData.TotalVolumeCredits = totalVolumeCredits(statementData)
+	return statementData
+}
+
+func Statement(invoice *Invoice, plays map[string]*Play) (string, error) {
+	return RenderPlainText(CreateStatementData(invoice, plays))
+}
+
 func RenderPlainText(data *statementData) (string, error) {
 	var (
 		result string
@@ -167,15 +182,22 @@ func RenderPlainText(data *statementData) (string, error) {
 	return result, nil
 }
 
-func findMax(a int64, b int64) int64 {
-	if a > b {
-		return a
-	}
-	return b
+// new HTML statement
+func HtmlStatement(invoice *Invoice, plays map[string]*Play) (string, error) {
+	return RenderHtmlText(CreateStatementData(invoice, plays))
 }
 
-func usd(value int64) string {
-	return fmt.Sprintf("$%v", fmt.Sprintf("%.2f", float64(value)/100))
+func RenderHtmlText(data *statementData) (string, error) {
+	result := fmt.Sprintf("<h1>Statement for %s </h1>\n", data.Customer)
+	result += "<table>\n"
+	result += "<tr><th>play</th><th>seats</th><th>cost</th></tr>\n"
+	for _, perf := range data.Performances {
+		result += fmt.Sprintf(" <tr><td>%s</td><td>%v</td><td>%v</td></tr>\n", perf.Play.Name, perf.Audience, usd(perf.Amount))
+	}
+	result += "</table>\n"
+	result += fmt.Sprintf("<p>Amount owed is <em>%v</em></p>\n", usd(data.TotalAmount))
+	result += fmt.Sprintf("<p>You earned  <em>%v</em> credits </p>\n", data.TotalVolumeCredits)
+	return result, nil
 }
 
 func main() {
@@ -230,4 +252,13 @@ func main() {
 		return
 	}
 	fmt.Println(statement)
+	fmt.Println("-------------------------")
+	time.Sleep(time.Second)
+	statement2, err := HtmlStatement(invoice, plays)
+	if err != nil {
+		log.WithError(err).Errorf("statement find err")
+		return
+	}
+	fmt.Println(statement2)
+
 }
