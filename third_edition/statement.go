@@ -54,85 +54,115 @@ func ReadPlays(data []byte) (map[string]*Play, error) {
 	return result, nil
 }
 
+type NewPerformance struct {
+	Play          *Play
+	Audience      int64
+	Amount        int64
+	VolumeCredits int64
+}
+
 type statementData struct {
-	Customer     string
-	Performances Performances
+	Customer           string
+	Performances       []*NewPerformance
+	Play               Play
+	TotalAmount        int64
+	TotalVolumeCredits int64
 }
 
 func Statement(invoice *Invoice, plays map[string]*Play) (string, error) {
 	statementData := new(statementData)
 	statementData.Customer = invoice.Customer
-	statementData.Performances = invoice.Performances
-	return RenderPlainText(statementData, plays)
+	statementData.Performances = enrichPerformance(invoice.Performances, plays)
+	statementData.TotalAmount = totalAmount(statementData)
+	statementData.TotalVolumeCredits = totalVolumeCredits(statementData)
+	return RenderPlainText(statementData)
 }
 
-func RenderPlainText(data *statementData, plays map[string]*Play) (string, error) {
+func enrichPerformance(performances Performances, plays map[string]*Play) []*NewPerformance {
+	result := make([]*NewPerformance, 0, len(performances))
+	for _, perf := range performances {
+		aNewPerformance := new(NewPerformance)
+		aNewPerformance.Play = playFor(perf, plays)
+		aNewPerformance.Audience = perf.Audience
+		thisAmount, err := amountFor(aNewPerformance)
+		if err != nil {
+			log.WithError(err).Errorf("amoutFor find err")
+			continue
+		}
+		aNewPerformance.Amount = thisAmount
+		aNewPerformance.VolumeCredits = volumeCreditsFor(aNewPerformance)
+
+		result = append(result, aNewPerformance)
+	}
+	return result
+
+}
+
+func playFor(aPerformance *Performance, plays map[string]*Play) *Play {
+	return plays[aPerformance.PlayID]
+}
+
+func amountFor(aNewPerformance *NewPerformance) (int64, error) {
+	result := int64(0)
+	switch aNewPerformance.Play.Type {
+	case "tragedy":
+		result = 40000
+		if aNewPerformance.Audience > 30 {
+			result += 1000 * (aNewPerformance.Audience - 30)
+		}
+		break
+	case "comedy":
+		result = 30000
+		if aNewPerformance.Audience > 20 {
+			result += 10000 + 500*(aNewPerformance.Audience-20)
+		}
+		result += 300 * aNewPerformance.Audience
+		break
+	default:
+		return 0, fmt.Errorf("unknown type, type: %v", aNewPerformance.Play.Type)
+	}
+	return result, nil
+}
+
+func totalAmount(data *statementData) int64 {
+	result := int64(0)
+	for _, perf := range data.Performances {
+		result += perf.Amount
+	}
+	return result
+}
+
+func volumeCreditsFor(aNewPerformance *NewPerformance) int64 {
+	result := int64(0)
+	result += findMax(aNewPerformance.Audience-30, 0)
+	if aNewPerformance.Play.Type == "comedy" {
+		result += int64(math.Floor(float64(aNewPerformance.Audience) / 5))
+	}
+	return result
+}
+
+func totalVolumeCredits(data *statementData) int64 {
+	result := int64(0)
+	for _, perf := range data.Performances {
+		result += perf.VolumeCredits
+	}
+	return result
+}
+
+func RenderPlainText(data *statementData) (string, error) {
 	var (
-		result      string
-		totalAmount int64
+		result string
 	)
-
-	// inner func playFor
-	playFor := func(aPerformance *Performance) *Play {
-		return plays[aPerformance.PlayID]
-	}
-
-	// inner func amountFor
-	amountFor := func(aPerformance *Performance) (int64, error) {
-		result := int64(0)
-		switch playFor(aPerformance).Type {
-		case "tragedy":
-			result = 40000
-			if aPerformance.Audience > 30 {
-				result += 1000 * (aPerformance.Audience - 30)
-			}
-			break
-		case "comedy":
-			result = 30000
-			if aPerformance.Audience > 20 {
-				result += 10000 + 500*(aPerformance.Audience-20)
-			}
-			result += 300 * aPerformance.Audience
-			break
-		default:
-			return 0, fmt.Errorf("unknown type, type: %v", playFor(aPerformance).Type)
-		}
-		return result, nil
-	}
-
-	// inner func volumeCreditsFor
-	volumeCreditsFor := func(aPerformance *Performance) int64 {
-		result := int64(0)
-		result += findMax(aPerformance.Audience-30, 0)
-		if playFor(aPerformance).Type == "comedy" {
-			result += int64(math.Floor(float64(aPerformance.Audience) / 5))
-		}
-		return result
-	}
-
-	// inner func totalVolumeCredits
-	totalVolumeCredits := func() int64 {
-		result := int64(0)
-		for _, perf := range data.Performances {
-			result += volumeCreditsFor(perf)
-		}
-		return result
-	}
-
 	// main process
 	result = fmt.Sprintf("Statement for %v \n", data.Customer)
 	for _, perf := range data.Performances {
-		thisAmount, err := amountFor(perf)
-		if err != nil {
-			return "", err
-		}
+
 		// print line for this order
-		result += fmt.Sprintf("  %s: %s (%v seats) \n", playFor(perf).Name, usd(thisAmount), perf.Audience)
-		totalAmount += thisAmount
+		result += fmt.Sprintf("  %s: %s (%v seats) \n", perf.Play.Name, usd(perf.Amount), perf.Audience)
 	}
 
-	result += fmt.Sprintf("Amount owed is %v \n", usd(totalAmount))
-	result += fmt.Sprintf("You earned %v credits\n", totalVolumeCredits())
+	result += fmt.Sprintf("Amount owed is %v \n", usd(data.TotalAmount))
+	result += fmt.Sprintf("You earned %v credits\n", data.TotalVolumeCredits)
 
 	return result, nil
 }
