@@ -69,20 +69,122 @@ type statementData struct {
 	TotalVolumeCredits int64
 }
 
+type Calculator interface {
+	getAmount() int64
+	volumeCredits() int64
+	getPlay() *Play
+}
+
+// parent
+type PerformanceCalculator struct {
+	Performance *Performance
+	Play        *Play
+}
+
+func (p *PerformanceCalculator) getAmount() int64 {
+	return 0 // never use
+}
+
+func (p *PerformanceCalculator) volumeCredits() int64 {
+	return findMax(p.Performance.Audience-30, 0)
+}
+
+func (p *PerformanceCalculator) getPlay() *Play {
+	return p.Play
+}
+
+// child ComedyCalculator
+type ComedyCalculator struct {
+	Calculator  // has a
+	Play        *Play
+	Performance *Performance
+}
+
+func (c *ComedyCalculator) getAmount() int64 {
+	result := int64(30000)
+	if c.Performance.Audience > 20 {
+		result += 10000 + 500*(c.Performance.Audience-20)
+	}
+	result += 300 * c.Performance.Audience
+	return result
+}
+
+func (c *ComedyCalculator) volumeCredits() int64 {
+	return c.Calculator.volumeCredits() + int64(math.Floor(float64(c.Performance.Audience)/5))
+}
+
+func (c *ComedyCalculator) getPlay() *Play {
+	return c.Play
+}
+
+type TragedyCalculator struct {
+	Calculator
+	Performance *Performance
+	Play        *Play
+}
+
+func (t *TragedyCalculator) getAmount() int64 {
+	result := int64(40000)
+	if t.Performance.Audience > 30 {
+		result += 1000 * (t.Performance.Audience - 30)
+	}
+	return result
+}
+
+func (t *TragedyCalculator) volumeCredits() int64 {
+	return t.Calculator.volumeCredits()
+}
+
+func (t *TragedyCalculator) getPlay() *Play {
+	return t.Play
+}
+
+func CreatePerformanceCalculator(aPerformance *Performance, aPlay *Play) Calculator {
+	switch aPlay.Type {
+	case "tragedy":
+		return NewTragedyCalculator(aPerformance, aPlay)
+	case "comedy":
+		return NewComedyCalculator(aPerformance, aPlay)
+	default:
+		return nil
+	}
+}
+
+func NewTragedyCalculator(aPerformance *Performance, aPlay *Play) *TragedyCalculator {
+	parent := &PerformanceCalculator{
+		Performance: aPerformance,
+		Play:        aPlay,
+	}
+	result := &TragedyCalculator{
+		Calculator:  parent,
+		Performance: aPerformance,
+		Play:        aPlay,
+	}
+	return result
+}
+
+func NewComedyCalculator(aPerformance *Performance, aPlay *Play) *ComedyCalculator {
+	parent := &PerformanceCalculator{
+		Performance: aPerformance,
+		Play:        aPlay,
+	}
+	result := &ComedyCalculator{
+		Calculator:  parent,
+		Performance: aPerformance,
+		Play:        aPlay,
+	}
+	return result
+}
+
 func enrichPerformance(performances Performances, plays map[string]*Play) []*NewPerformance {
 	result := make([]*NewPerformance, 0, len(performances))
 	for _, perf := range performances {
+		calculator := CreatePerformanceCalculator(perf, playFor(perf, plays))
 		aNewPerformance := new(NewPerformance)
-		aNewPerformance.Play = playFor(perf, plays)
 		aNewPerformance.Audience = perf.Audience
-		thisAmount, err := amountFor(aNewPerformance)
-		if err != nil {
-			log.WithError(err).Errorf("amoutFor find err")
-			continue
-		}
-		aNewPerformance.Amount = thisAmount
-		aNewPerformance.VolumeCredits = volumeCreditsFor(aNewPerformance)
-
+		aNewPerformance.Play = calculator.getPlay()
+		aNewPerformance.Amount = calculator.getAmount()
+		aNewPerformance.VolumeCredits = calculator.volumeCredits()
 		result = append(result, aNewPerformance)
 	}
 	return result
@@ -93,41 +195,10 @@ func playFor(aPerformance *Performance, plays map[string]*Play) *Play {
 	return plays[aPerformance.PlayID]
 }
 
-func amountFor(aNewPerformance *NewPerformance) (int64, error) {
-	result := int64(0)
-	switch aNewPerformance.Play.Type {
-	case "tragedy":
-		result = 40000
-		if aNewPerformance.Audience > 30 {
-			result += 1000 * (aNewPerformance.Audience - 30)
-		}
-		break
-	case "comedy":
-		result = 30000
-		if aNewPerformance.Audience > 20 {
-			result += 10000 + 500*(aNewPerformance.Audience-20)
-		}
-		result += 300 * aNewPerformance.Audience
-		break
-	default:
-		return 0, fmt.Errorf("unknown type, type: %v", aNewPerformance.Play.Type)
-	}
-	return result, nil
-}
-
 func totalAmount(data *statementData) int64 {
 	result := int64(0)
 	for _, perf := range data.Performances {
 		result += perf.Amount
-	}
-	return result
-}
-
-func volumeCreditsFor(aNewPerformance *NewPerformance) int64 {
-	result := int64(0)
-	result += findMax(aNewPerformance.Audience-30, 0)
-	if aNewPerformance.Play.Type == "comedy" {
-		result += int64(math.Floor(float64(aNewPerformance.Audience) / 5))
 	}
 	return result
 }
