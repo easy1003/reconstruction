@@ -64,7 +64,6 @@ type NewPerformance struct {
 type statementData struct {
 	Customer           string
 	Performances       []*NewPerformance
-	Play               Play
 	TotalAmount        int64
 	TotalVolumeCredits int64
 }
